@@ -131,6 +131,7 @@
                         <tr>
                             <th>PDF</th>
                             <th>Registration Code</th>
+                            <th>Type</th>
                             <th>Expiration</th>
                             <th>Actions</th>
                         </tr>
@@ -183,7 +184,8 @@ function updateFilters() {
     const type = typeFilter.value;
     filteredLicenses = allLicenses.filter((lic) => {
         if (type === "ALL") return true;
-        return (lic.code || "").toUpperCase().includes(type);
+        const candidate = (lic.keyword || lic.code || "").toUpperCase();
+        return candidate.includes(type);
     });
 }
 
@@ -202,6 +204,9 @@ function renderTable() {
             .map((lic) => {
                 const safeFile = escapeHtml(lic.filename);
                 const safeCode = escapeHtml(lic.code);
+                const typeCell = lic.keyword !== "Unknown"
+                    ? `<span class="pill">${escapeHtml(lic.keyword)}</span>`
+                    : '<span class="pill warning">Unknown</span>';
                 const dateCell = lic.expiration !== "Unknown"
                     ? `<span class="pill">${escapeHtml(lic.expiration)}</span>`
                     : '<span class="pill warning">Unknown</span>';
@@ -210,6 +215,7 @@ function renderTable() {
                 <tr class="row-compact" id="row-${safeFile}">
                     <td>${safeFile}</td>
                     <td>${safeCode}</td>
+                    <td>${typeCell}</td>
                     <td>${dateCell}</td>
                     <td>
                         <div class="actions">
