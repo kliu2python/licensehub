@@ -1,36 +1,67 @@
 import os
 import re
 from pathlib import Path
-from fastapi import FastAPI, Request, HTTPException, UploadFile, File
-from fastapi.responses import HTMLResponse
+from typing import Optional
+
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from dateutil import parser
 from PyPDF2 import PdfReader
 
 LICENSE_ROOT = Path("licenses")
 templates = Jinja2Templates(directory="templates")
+app = FastAPI(title="License Hub")
 
-app = FastAPI()
+
+def ensure_license_root():
+    LICENSE_ROOT.mkdir(parents=True, exist_ok=True)
 
 
-def extract_code(pdf: Path):
+def parse_date(text: str) -> Optional[str]:
+    """Attempt to parse a date string into ISO format (YYYY-MM-DD)."""
     try:
-        reader = PdfReader(str(pdf))
-    except:
+        dt = parser.parse(text, fuzzy=True)
+        return dt.strftime("%Y-%m-%d")
+    except (parser.ParserError, ValueError, TypeError):
         return None
 
-    text = ""
-    for page in reader.pages:
-        t = page.extract_text()
-        if t:
-            text += t + "\n"
 
-    m = re.search(r"Registration Code\s*:\s*([A-Z0-9\-]+)", text)
-    return m.group(1) if m else None
+def extract_license_info(pdf: Path) -> dict[str, Optional[str]]:
+    try:
+        reader = PdfReader(str(pdf))
+    except Exception:
+        return {"code": None, "expiration": None}
+
+    text_chunks: list[str] = []
+    for page in reader.pages:
+        page_text = page.extract_text() or ""
+        text_chunks.append(page_text)
+    text = "\n".join(text_chunks)
+
+    code_match = re.search(r"Registration Code\s*:\s*([A-Z0-9\-]+)", text, re.IGNORECASE)
+    expiration_match = re.search(
+        r"(Expiration|Expiry|Expires)\s*(Date)?\s*:?\s*([A-Za-z0-9,\-/ ]{6,30})",
+        text,
+        re.IGNORECASE,
+    )
+
+    raw_expiration = expiration_match.group(3).strip() if expiration_match else None
+    expiration = parse_date(raw_expiration) if raw_expiration else None
+
+    return {
+        "code": code_match.group(1).upper() if code_match else None,
+        "expiration": expiration,
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    ensure_license_root()
+    projects = sorted([p.name for p in LICENSE_ROOT.iterdir() if p.is_dir()])
+    return templates.TemplateResponse(
+        "index.html", {"request": request, "projects": projects}
+    )
 
 
 @app.get("/project/{project}", response_class=HTMLResponse)
@@ -38,21 +69,27 @@ def project_page(project: str, request: Request):
     project_path = LICENSE_ROOT / project
     project_path.mkdir(parents=True, exist_ok=True)
 
-    pdf_files = list(project_path.glob("*.pdf"))
+    pdf_files = sorted(project_path.glob("*.pdf"))
     licenses = []
 
     for pdf in pdf_files:
-        code = extract_code(pdf)
-        licenses.append({
-            "filename": pdf.name,
-            "code": code or "Not Found"
-        })
+        info = extract_license_info(pdf)
+        licenses.append(
+            {
+                "filename": pdf.name,
+                "code": info["code"] or "Not Found",
+                "expiration": info["expiration"] or "Unknown",
+            }
+        )
 
-    return templates.TemplateResponse("project.html", {
-        "request": request,
-        "project": project,
-        "licenses": licenses
-    })
+    return templates.TemplateResponse(
+        "project.html",
+        {
+            "request": request,
+            "project": project,
+            "licenses": licenses,
+        },
+    )
 
 
 @app.post("/project/{project}/upload")
@@ -69,17 +106,12 @@ async def upload_multiple_pdfs(project: str, files: list[UploadFile] = File(...)
             continue
 
         save_path = project_path / file.filename
-
-        # Save PDF
         with open(save_path, "wb") as f:
             f.write(await file.read())
 
         uploaded.append(file.filename)
 
-    return {
-        "uploaded": uploaded,
-        "skipped": skipped
-    }
+    return {"uploaded": uploaded, "skipped": skipped}
 
 
 @app.delete("/project/{project}/delete/{filename}")
@@ -91,3 +123,21 @@ def delete_license(project: str, filename: str):
 
     os.remove(pdf_path)
     return {"status": "deleted"}
+
+
+@app.get("/project/{project}/download/{filename}")
+def download_license(project: str, filename: str):
+    pdf_path = LICENSE_ROOT / project / filename
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="File does not exist")
+    return FileResponse(pdf_path, media_type="application/pdf", filename=filename)
+
+
+@app.get("/project/{project}/license/{filename}")
+def get_license_metadata(project: str, filename: str):
+    pdf_path = LICENSE_ROOT / project / filename
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="File does not exist")
+
+    info = extract_license_info(pdf_path)
+    return {"filename": filename, "code": info["code"], "expiration": info["expiration"]}
