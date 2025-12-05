@@ -3,3 +3,5 @@ uvicorn
 jinja2
 PyPDF2
 python-dateutil
+pdf2image
+pytesseract
