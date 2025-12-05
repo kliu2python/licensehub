@@ -253,14 +253,21 @@ async function submitUpload() {
     }
 
     const res = await fetch(`/project/${project}/upload`, { method: "POST", body: formData });
-    const result = await res.json();
+    let result;
 
-    if (res.ok) {
+    try {
+        result = await res.json();
+    } catch (err) {
+        console.error("Upload response was not JSON", err);
+    }
+
+    if (res.ok && result) {
         statusEl.textContent = `Uploaded: ${result.uploaded.length}, Skipped: ${result.skipped.length}`;
         setTimeout(() => location.reload(), 400);
     } else {
-        statusEl.textContent = "Upload failed";
-        alert("Upload failed.");
+        const message = (result && result.detail) ? result.detail : "Upload failed";
+        statusEl.textContent = message;
+        alert(message);
     }
 }
 

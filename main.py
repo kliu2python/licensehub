@@ -95,10 +95,17 @@ def extract_license_info(pdf: Path) -> dict[str, Optional[str]]:
 
 
 def extract_ftm_activation_code(pdf: Path) -> Optional[str]:
-    images = convert_from_path(pdf)
+    try:
+        images = convert_from_path(pdf)
+    except Exception:
+        return None
 
     for image in images:
-        text = pytesseract.image_to_string(image).upper()
+        try:
+            text = pytesseract.image_to_string(image).upper()
+        except Exception:
+            continue
+
         match = re.search(r"[A-Z0-9]{5}(?:-[A-Z0-9]{5}){4}", text)
         if match:
             return match.group(0)
