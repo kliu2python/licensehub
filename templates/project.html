@@ -24,13 +24,15 @@
         }
         a { color: var(--accent); }
         .topbar {
-            display: grid;
-            grid-template-columns: 1.5fr 1fr;
+            display: flex;
+            flex-wrap: wrap;
             align-items: center;
-            gap: 16px;
+            justify-content: space-between;
+            gap: 12px;
             margin-bottom: 20px;
         }
-        .badge { padding: 8px 12px; background: rgba(88,166,255,0.1); border: 1px solid rgba(88,166,255,0.3); border-radius: 999px; color: var(--accent); font-weight: 600; }
+        .title-area { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+        .topbar h1 { margin: 0; }
         .shell { max-width: 1200px; margin: 0 auto; }
         .panel {
             background: linear-gradient(145deg, #161b22, #0b0f14);
@@ -81,9 +83,8 @@
 <body>
 <div class="shell">
     <div class="topbar">
-        <div>
-            <div class="badge">Project</div>
-            <h1 style="margin: 8px 0 0;">{{ project }}</h1>
+        <div class="title-area">
+            <h1>{{ project }}</h1>
             <p class="subtitle">Upload, extract and share license PDFs from a clean workspace.</p>
         </div>
         <div class="mini-upload">
