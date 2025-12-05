@@ -20,13 +20,13 @@
             background: var(--bg);
             color: var(--text);
             font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-            padding: 32px;
+            padding: 24px 32px 40px;
         }
         a { color: var(--accent); }
         .topbar {
-            display: flex;
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
             align-items: center;
-            justify-content: space-between;
             gap: 16px;
             margin-bottom: 20px;
         }
@@ -36,20 +36,21 @@
             background: linear-gradient(145deg, #161b22, #0b0f14);
             border: 1px solid var(--border);
             border-radius: 16px;
-            padding: 20px;
+            padding: 18px;
             box-shadow: 0 20px 80px rgba(0, 0, 0, 0.35);
         }
-        .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
-        .card { background: rgba(22,27,34,0.75); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+        .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+        .card { background: rgba(22,27,34,0.75); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
         h2 { margin: 0 0 8px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 12px; text-align: left; }
+        th, td { padding: 9px 10px; text-align: left; }
         th { text-transform: uppercase; letter-spacing: 0.04em; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
         tr td { border-bottom: 1px solid var(--border); }
         tr:last-child td { border-bottom: none; }
-        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .actions { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; }
+        .row-compact td { white-space: nowrap; }
         button, .ghost {
-            padding: 10px 12px;
+            padding: 9px 12px;
             border-radius: 10px;
             border: 1px solid var(--border);
             background: rgba(88,166,255,0.1);
@@ -68,6 +69,13 @@
         .flex { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
         input[type="file"] { width: 100%; color: var(--text); }
         .subtitle { color: var(--muted); margin: 0; }
+        .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+        .controls select { background: #0d1117; border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 8px; }
+        .mini-upload { display: grid; grid-template-columns: 1.3fr auto auto; gap: 8px; align-items: center; background: rgba(22,27,34,0.75); border: 1px solid var(--border); border-radius: 12px; padding: 10px; }
+        .mini-upload label { font-size: 13px; color: var(--muted); }
+        .mini-upload input[type="file"] { padding: 6px; }
+        .pagination { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin-top: 10px; }
+        .tag { background: rgba(88,166,255,0.14); padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(88,166,255,0.35); font-size: 13px; color: var(--accent); }
     </style>
 </head>
 <body>
@@ -78,20 +86,43 @@
             <h1 style="margin: 8px 0 0;">{{ project }}</h1>
             <p class="subtitle">Upload, extract and share license PDFs from a clean workspace.</p>
         </div>
-        <div class="flex">
-            <a class="ghost" href="/">◀ Back to hub</a>
-            <button class="primary" onclick="refreshPage()">Refresh</button>
+        <div class="mini-upload">
+            <label for="miniFiles">Upload PDFs</label>
+            <input id="miniFiles" type="file" name="files" accept="application/pdf" multiple>
+            <button type="button" class="primary" onclick="submitUpload()">Upload</button>
         </div>
     </div>
 
     <div class="grid">
         <div class="panel">
-            <div class="flex" style="justify-content: space-between; align-items: flex-start;">
+            <div class="flex" style="justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
                 <div>
                     <h2>Licenses</h2>
                     <p class="subtitle">Registration codes and expiration hints pulled straight from PDFs.</p>
                 </div>
-                <span class="pill">{{ licenses|length }} files</span>
+                <div class="flex" style="gap: 8px;">
+                    <span class="pill">{{ licenses|length }} files</span>
+                    <a class="ghost" href="/">◀ Back to hub</a>
+                    <button class="ghost" onclick="refreshPage()">Refresh</button>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="tag">Filters</div>
+                <label class="subtitle" for="typeFilter">License type</label>
+                <select id="typeFilter">
+                    <option value="ALL">All</option>
+                    <option value="FGT">FGT</option>
+                    <option value="FAC">FAC</option>
+                    <option value="FTM">FTM</option>
+                    <option value="FIC">FIC</option>
+                </select>
+                <label class="subtitle" for="perPage">Per page</label>
+                <select id="perPage">
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                </select>
+                <div class="status" id="status">Waiting for files…</div>
             </div>
 
             <div class="table-container">
@@ -104,68 +135,114 @@
                             <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for lic in licenses %}
-                        <tr id="row-{{ lic.filename }}">
-                            <td>{{ lic.filename }}</td>
-                            <td>{{ lic.code }}</td>
-                            <td>
-                                {% if lic.expiration != 'Unknown' %}
-                                    <span class="pill">{{ lic.expiration }}</span>
-                                {% else %}
-                                    <span class="pill warning">Unknown</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <div class="actions">
-                                    <button onclick="copyText('{{ lic.code }}', 'Registration code copied')">Copy code</button>
-                                    <button onclick="copyShare('{{ lic.filename }}')">Share link</button>
-                                    <button class="danger" onclick="deleteFile('{{ lic.filename }}')">Delete</button>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                        {% if licenses|length == 0 %}
+                    <tbody id="licenseBody">
                         <tr><td colspan="4" class="muted">No licenses yet. Upload PDFs to get started.</td></tr>
-                        {% endif %}
                     </tbody>
                 </table>
             </div>
-        </div>
-
-        <div class="panel">
-            <h2>Upload new PDFs</h2>
-            <p class="subtitle">Drop multiple PDFs to extract codes and expiration dates automatically.</p>
-            <form id="uploadForm" enctype="multipart/form-data">
-                <input type="file" name="files" accept="application/pdf" multiple required>
-                <div class="flex" style="justify-content: flex-end;">
-                    <button type="submit" class="primary">Upload files</button>
+            <div class="pagination">
+                <div class="status" id="pageInfo"></div>
+                <div class="flex" style="gap: 8px;">
+                    <button class="ghost" onclick="changePage(-1)">Prev</button>
+                    <button class="ghost" onclick="changePage(1)">Next</button>
                 </div>
-                <div id="status" class="status muted">Waiting for files…</div>
-            </form>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
 const project = {{ project|tojson }};
+const allLicenses = {{ licenses|tojson }};
+
+let filteredLicenses = [...allLicenses];
+let currentPage = 1;
+let perPage = 5;
+
+const statusEl = document.getElementById("status");
+const licenseBody = document.getElementById("licenseBody");
+const pageInfo = document.getElementById("pageInfo");
+const perPageSelect = document.getElementById("perPage");
+const typeFilter = document.getElementById("typeFilter");
+const miniFiles = document.getElementById("miniFiles");
 
 function refreshPage() {
     location.reload();
 }
 
-// Upload multiple PDFs
-const uploadForm = document.getElementById("uploadForm");
-const statusEl = document.getElementById("status");
+function escapeHtml(str) {
+    return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
 
-uploadForm.onsubmit = async (e) => {
-    e.preventDefault();
+function updateFilters() {
+    const type = typeFilter.value;
+    filteredLicenses = allLicenses.filter((lic) => {
+        if (type === "ALL") return true;
+        return (lic.code || "").toUpperCase().includes(type);
+    });
+}
+
+function renderTable() {
+    const total = filteredLicenses.length;
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const start = (currentPage - 1) * perPage;
+    const pageItems = filteredLicenses.slice(start, start + perPage);
+
+    if (pageItems.length === 0) {
+        licenseBody.innerHTML = '<tr><td colspan="4" class="muted">No licenses match this filter.</td></tr>';
+    } else {
+        licenseBody.innerHTML = pageItems
+            .map((lic) => {
+                const safeFile = escapeHtml(lic.filename);
+                const safeCode = escapeHtml(lic.code);
+                const dateCell = lic.expiration !== "Unknown"
+                    ? `<span class="pill">${escapeHtml(lic.expiration)}</span>`
+                    : '<span class="pill warning">Unknown</span>';
+
+                return `
+                <tr class="row-compact" id="row-${safeFile}">
+                    <td>${safeFile}</td>
+                    <td>${safeCode}</td>
+                    <td>${dateCell}</td>
+                    <td>
+                        <div class="actions">
+                            <button onclick="copyText(${JSON.stringify(lic.code || "")}, 'Registration code copied')">Copy code</button>
+                            <button onclick="copyShare(${JSON.stringify(lic.filename)})">Share link</button>
+                            <button class="danger" onclick="deleteFile(${JSON.stringify(lic.filename)})">Delete</button>
+                        </div>
+                    </td>
+                </tr>`;
+            })
+            .join("");
+    }
+
+    const end = start + pageItems.length;
+    pageInfo.textContent = pageItems.length ? `${start + 1}-${end} of ${total}` : `0 of ${total}`;
+}
+
+function changePage(delta) {
+    const totalPages = Math.max(1, Math.ceil(filteredLicenses.length / perPage));
+    currentPage = Math.min(Math.max(1, currentPage + delta), totalPages);
+    renderTable();
+}
+
+async function submitUpload() {
+    if (!miniFiles.files.length) {
+        statusEl.textContent = "Pick PDF files first.";
+        return;
+    }
+
     statusEl.textContent = "Uploading…";
-
     const formData = new FormData();
-    const files = e.target.querySelector('input[type="file"]').files;
-    for (let f of files) {
-        formData.append("files", f);
+    for (const file of miniFiles.files) {
+        formData.append("files", file);
     }
 
     const res = await fetch(`/project/${project}/upload`, { method: "POST", body: formData });
@@ -178,7 +255,7 @@ uploadForm.onsubmit = async (e) => {
         statusEl.textContent = "Upload failed";
         alert("Upload failed.");
     }
-};
+}
 
 function copyText(text, message) {
     navigator.clipboard.writeText(text || "");
@@ -195,15 +272,33 @@ function deleteFile(filename) {
     if (!confirm(`Delete ${filename}?`)) return;
 
     fetch(`/project/${project}/delete/${filename}`, { method: "DELETE" })
-        .then(r => {
+        .then((r) => {
             if (r.ok) {
-                document.getElementById("row-" + filename)?.remove();
+                const index = allLicenses.findIndex((l) => l.filename === filename);
+                if (index >= 0) allLicenses.splice(index, 1);
+                updateFilters();
+                renderTable();
                 statusEl.textContent = `${filename} removed`;
             } else {
                 alert("Delete failed");
             }
         });
 }
+
+perPageSelect.addEventListener("change", () => {
+    perPage = parseInt(perPageSelect.value, 10) || 5;
+    currentPage = 1;
+    renderTable();
+});
+
+typeFilter.addEventListener("change", () => {
+    currentPage = 1;
+    updateFilters();
+    renderTable();
+});
+
+updateFilters();
+renderTable();
 </script>
 </body>
 </html>
