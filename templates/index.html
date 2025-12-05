@@ -1,23 +1,145 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>License Manager</title>
+    <meta charset="UTF-8">
+    <title>License Hub</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --panel: #161b22;
+            --accent: #58a6ff;
+            --accent-2: #f78166;
+            --text: #e6edf3;
+            --muted: #8b949e;
+            --border: #30363d;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+            background: radial-gradient(circle at 10% 20%, rgba(52, 211, 153, 0.08), transparent 25%),
+                        radial-gradient(circle at 90% 10%, rgba(88, 166, 255, 0.08), transparent 25%),
+                        radial-gradient(circle at 80% 80%, rgba(247, 129, 102, 0.08), transparent 20%),
+                        var(--bg);
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 24px;
+        }
+        .shell {
+            width: min(1100px, 100%);
+        }
+        header {
+            background: linear-gradient(145deg, #161b22, #0b0f14);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 20px 80px rgba(0, 0, 0, 0.35);
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 32px;
+            letter-spacing: -0.02em;
+        }
+        p { margin: 6px 0; color: var(--muted); }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(88, 166, 255, 0.1);
+            color: var(--accent);
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-weight: 600;
+            font-size: 13px;
+            border: 1px solid rgba(88, 166, 255, 0.3);
+        }
+        form {
+            display: grid;
+            gap: 12px;
+            background: rgba(22, 27, 34, 0.8);
+            border: 1px solid var(--border);
+            padding: 16px;
+            border-radius: 12px;
+        }
+        label { color: var(--muted); font-size: 14px; }
+        input[type="text"] {
+            width: 100%;
+            padding: 14px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: #0d1117;
+            color: var(--text);
+            font-size: 16px;
+        }
+        button {
+            padding: 14px 12px;
+            background: linear-gradient(135deg, var(--accent), #2c82e6);
+            border: none;
+            color: white;
+            font-weight: 700;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 120ms ease, box-shadow 120ms ease;
+            box-shadow: 0 14px 40px rgba(88, 166, 255, 0.25);
+        }
+        button:hover { transform: translateY(-1px); box-shadow: 0 18px 45px rgba(88, 166, 255, 0.35); }
+        .grid { margin-top: 18px; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+        .card {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            background: rgba(22, 27, 34, 0.7);
+            backdrop-filter: blur(8px);
+        }
+        .card h3 { margin: 0 0 8px; font-size: 18px; }
+        .card small { color: var(--muted); }
+        .empty { color: var(--muted); text-align: center; padding: 20px 0; }
+    </style>
 </head>
-<body style="font-family:Arial; padding:20px;">
+<body>
+<div class="shell">
+    <header>
+        <div>
+            <div class="pill">Modern License Hub</div>
+            <h1>Manage &amp; share licenses effortlessly</h1>
+            <p>Upload PDFs, auto-extract registration codes, and get expiration hints in seconds.</p>
+        </div>
+        <form onsubmit="event.preventDefault(); go()">
+            <label for="project">Start or open a project</label>
+            <input type="text" id="project" placeholder="Example: FortiToken" required>
+            <button type="submit">Go to project</button>
+        </form>
+    </header>
 
-<h2>Enter Project Name</h2>
-
-<form onsubmit="event.preventDefault(); go()">
-    <input type="text" id="project" placeholder="Example: FortiToken" required>
-    <button type="submit">Enter</button>
-</form>
-
+    <div class="card" style="margin-top: 16px;">
+        <h3>Quick access</h3>
+        {% if projects %}
+        <div class="grid">
+            {% for proj in projects %}
+            <div class="card" style="border-color: rgba(88,166,255,0.25);">
+                <h3>{{ proj }}</h3>
+                <p style="margin-bottom: 12px;">Existing workspace</p>
+                <button style="width:100%;" onclick="window.location='/project/{{ proj }}'">Open</button>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty">No projects yet. Create one with the form above.</div>
+        {% endif %}
+    </div>
+</div>
 <script>
 function go() {
     const p = document.getElementById("project").value.trim();
-    window.location.href = "/project/" + p;
+    if (!p) return;
+    window.location.href = "/project/" + encodeURIComponent(p);
 }
 </script>
-
 </body>
 </html>

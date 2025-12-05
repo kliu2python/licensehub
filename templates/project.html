@@ -1,85 +1,209 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Project: {{ project }}</title>
+    <meta charset="UTF-8">
+    <title>{{ project }} | License Hub</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --panel: #161b22;
+            --accent: #58a6ff;
+            --accent-2: #f78166;
+            --success: #3fb950;
+            --text: #e6edf3;
+            --muted: #8b949e;
+            --border: #30363d;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+            padding: 32px;
+        }
+        a { color: var(--accent); }
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .badge { padding: 8px 12px; background: rgba(88,166,255,0.1); border: 1px solid rgba(88,166,255,0.3); border-radius: 999px; color: var(--accent); font-weight: 600; }
+        .shell { max-width: 1200px; margin: 0 auto; }
+        .panel {
+            background: linear-gradient(145deg, #161b22, #0b0f14);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 20px 80px rgba(0, 0, 0, 0.35);
+        }
+        .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        .card { background: rgba(22,27,34,0.75); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+        h2 { margin: 0 0 8px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; }
+        th { text-transform: uppercase; letter-spacing: 0.04em; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
+        tr td { border-bottom: 1px solid var(--border); }
+        tr:last-child td { border-bottom: none; }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        button, .ghost {
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(88,166,255,0.1);
+            color: var(--text);
+            cursor: pointer;
+            transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+        }
+        button.primary { background: linear-gradient(135deg, var(--accent), #2c82e6); border: none; box-shadow: 0 10px 35px rgba(88,166,255,0.35); }
+        button.danger { background: rgba(247, 129, 102, 0.15); border-color: rgba(247, 129, 102, 0.5); color: #ffc7bb; }
+        button:hover, .ghost:hover { transform: translateY(-1px); }
+        .muted { color: var(--muted); font-size: 14px; }
+        .status { font-size: 14px; margin-top: 8px; }
+        .pill { padding: 6px 10px; border-radius: 8px; background: rgba(63,185,80,0.12); color: var(--success); font-weight: 600; border: 1px solid rgba(63,185,80,0.4); }
+        .pill.warning { background: rgba(247,129,102,0.15); color: #ffb4a2; border-color: rgba(247,129,102,0.4); }
+        .table-container { overflow: auto; }
+        .flex { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        input[type="file"] { width: 100%; color: var(--text); }
+        .subtitle { color: var(--muted); margin: 0; }
+    </style>
 </head>
-<body style="font-family:Arial; padding:20px;">
+<body>
+<div class="shell">
+    <div class="topbar">
+        <div>
+            <div class="badge">Project</div>
+            <h1 style="margin: 8px 0 0;">{{ project }}</h1>
+            <p class="subtitle">Upload, extract and share license PDFs from a clean workspace.</p>
+        </div>
+        <div class="flex">
+            <a class="ghost" href="/">◀ Back to hub</a>
+            <button class="primary" onclick="refreshPage()">Refresh</button>
+        </div>
+    </div>
 
-<h2>Project: {{ project }}</h2>
+    <div class="grid">
+        <div class="panel">
+            <div class="flex" style="justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <h2>Licenses</h2>
+                    <p class="subtitle">Registration codes and expiration hints pulled straight from PDFs.</p>
+                </div>
+                <span class="pill">{{ licenses|length }} files</span>
+            </div>
 
-<h3>Upload New License PDFs</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>PDF</th>
+                            <th>Registration Code</th>
+                            <th>Expiration</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lic in licenses %}
+                        <tr id="row-{{ lic.filename }}">
+                            <td>{{ lic.filename }}</td>
+                            <td>{{ lic.code }}</td>
+                            <td>
+                                {% if lic.expiration != 'Unknown' %}
+                                    <span class="pill">{{ lic.expiration }}</span>
+                                {% else %}
+                                    <span class="pill warning">Unknown</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="actions">
+                                    <button onclick="copyText('{{ lic.code }}', 'Registration code copied')">Copy code</button>
+                                    <button onclick="copyShare('{{ lic.filename }}')">Share link</button>
+                                    <button class="danger" onclick="deleteFile('{{ lic.filename }}')">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if licenses|length == 0 %}
+                        <tr><td colspan="4" class="muted">No licenses yet. Upload PDFs to get started.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-<form id="uploadForm" enctype="multipart/form-data">
-    <input type="file" name="files" accept="application/pdf" multiple required>
-    <button type="submit">Upload</button>
-</form>
-
-<hr>
-<table border="1" cellpadding="8" cellspacing="0">
-    <tr>
-        <th>PDF File</th>
-        <th>Registration Code</th>
-        <th>Actions</th>
-    </tr>
-
-    {% for lic in licenses %}
-    <tr id="row-{{ lic.filename }}">
-        <td>{{ lic.filename }}</td>
-        <td>{{ lic.code }}</td>
-        <td>
-            <button onclick="copyCode('{{ lic.code }}')">Copy</button>
-            <button onclick="deleteFile('{{ lic.filename }}')">Delete</button>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
+        <div class="panel">
+            <h2>Upload new PDFs</h2>
+            <p class="subtitle">Drop multiple PDFs to extract codes and expiration dates automatically.</p>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <input type="file" name="files" accept="application/pdf" multiple required>
+                <div class="flex" style="justify-content: flex-end;">
+                    <button type="submit" class="primary">Upload files</button>
+                </div>
+                <div id="status" class="status muted">Waiting for files…</div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <script>
-// Upload PDF
+const project = {{ project|tojson }};
+
+function refreshPage() {
+    location.reload();
+}
+
 // Upload multiple PDFs
-document.getElementById("uploadForm").onsubmit = async (e) => {
+const uploadForm = document.getElementById("uploadForm");
+const statusEl = document.getElementById("status");
+
+uploadForm.onsubmit = async (e) => {
     e.preventDefault();
+    statusEl.textContent = "Uploading…";
 
-    let formData = new FormData();
-
+    const formData = new FormData();
     const files = e.target.querySelector('input[type="file"]').files;
     for (let f of files) {
         formData.append("files", f);
     }
 
-    let res = await fetch("/project/{{ project }}/upload", {
-        method: "POST",
-        body: formData
-    });
-
-    let result = await res.json();
+    const res = await fetch(`/project/${project}/upload`, { method: "POST", body: formData });
+    const result = await res.json();
 
     if (res.ok) {
-        alert(
-            "Uploaded: " + result.uploaded.join(", ") +
-            (result.skipped.length > 0 ? "\nSkipped: " + result.skipped.join(", ") : "")
-        );
-        location.reload();
+        statusEl.textContent = `Uploaded: ${result.uploaded.length}, Skipped: ${result.skipped.length}`;
+        setTimeout(() => location.reload(), 400);
     } else {
+        statusEl.textContent = "Upload failed";
         alert("Upload failed.");
     }
 };
 
-function copyCode(code) {
-    navigator.clipboard.writeText(code);
-    alert("Copied: " + code);
+function copyText(text, message) {
+    navigator.clipboard.writeText(text || "");
+    statusEl.textContent = message;
+}
+
+function copyShare(filename) {
+    const url = `${window.location.origin}/project/${project}/download/${filename}`;
+    navigator.clipboard.writeText(url);
+    statusEl.textContent = "Shareable download link copied";
 }
 
 function deleteFile(filename) {
-    if (!confirm("Delete " + filename + "?")) return;
+    if (!confirm(`Delete ${filename}?`)) return;
 
-    fetch(`/project/{{ project }}/delete/` + filename, { method: "DELETE" })
+    fetch(`/project/${project}/delete/${filename}`, { method: "DELETE" })
         .then(r => {
-            if (r.ok) document.getElementById("row-" + filename).remove();
-            else alert("Delete failed");
+            if (r.ok) {
+                document.getElementById("row-" + filename)?.remove();
+                statusEl.textContent = `${filename} removed`;
+            } else {
+                alert("Delete failed");
+            }
         });
 }
 </script>
-
 </body>
 </html>
