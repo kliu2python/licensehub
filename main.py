@@ -27,11 +27,30 @@ def parse_date(text: str) -> Optional[str]:
         return None
 
 
+KEYWORD_PATTERNS: dict[str, list[str]] = {
+    "FGT": ["FORTIGATE", "FGT"],
+    "FAC": ["FORTIAUTHENTICATOR", "FAC"],
+    "FTM": ["FORTITOKEN", "FORTITOKENS", "FTM"],
+    "FIC": ["FORTIIDENTITY CLOUD", "FORTIIDENTITYCLOUD", "FIC"],
+}
+
+
+def find_keyword(text: str) -> Optional[str]:
+    upper_text = text.upper()
+
+    for keyword, patterns in KEYWORD_PATTERNS.items():
+        for pattern in patterns:
+            if pattern in upper_text:
+                return keyword
+
+    return None
+
+
 def extract_license_info(pdf: Path) -> dict[str, Optional[str]]:
     try:
         reader = PdfReader(str(pdf))
     except Exception:
-        return {"code": None, "expiration": None}
+        return {"code": None, "expiration": None, "keyword": None}
 
     text_chunks: list[str] = []
     for page in reader.pages:
@@ -39,7 +58,17 @@ def extract_license_info(pdf: Path) -> dict[str, Optional[str]]:
         text_chunks.append(page_text)
     text = "\n".join(text_chunks)
 
-    code_match = re.search(r"Registration Code\s*:\s*([A-Z0-9\-]+)", text, re.IGNORECASE)
+    code_match = None
+    code_patterns = [
+        r"Registration Code\s*:\s*([A-Z0-9\-]+)",
+        r"Contract Registration Code\s*:\s*([A-Z0-9\-]+)",
+        r"Activation Code\s*:?\s*([A-Z0-9\-]+)",
+    ]
+
+    for pattern in code_patterns:
+        code_match = re.search(pattern, text, re.IGNORECASE)
+        if code_match:
+            break
     expiration_match = re.search(
         r"(Expiration|Expiry|Expires)\s*(Date)?\s*:?\s*([A-Za-z0-9,\-/ ]{6,30})",
         text,
@@ -52,6 +81,7 @@ def extract_license_info(pdf: Path) -> dict[str, Optional[str]]:
     return {
         "code": code_match.group(1).upper() if code_match else None,
         "expiration": expiration,
+        "keyword": find_keyword(text),
     }
 
 
@@ -79,6 +109,7 @@ def project_page(project: str, request: Request):
                 "filename": pdf.name,
                 "code": info["code"] or "Not Found",
                 "expiration": info["expiration"] or "Unknown",
+                "keyword": info["keyword"] or "Unknown",
             }
         )
 
@@ -140,4 +171,9 @@ def get_license_metadata(project: str, filename: str):
         raise HTTPException(status_code=404, detail="File does not exist")
 
     info = extract_license_info(pdf_path)
-    return {"filename": filename, "code": info["code"], "expiration": info["expiration"]}
+    return {
+        "filename": filename,
+        "code": info["code"],
+        "expiration": info["expiration"],
+        "keyword": info["keyword"],
+    }
