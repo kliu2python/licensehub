@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Project: {{ project }}</title>
+</head>
+<body style="font-family:Arial; padding:20px;">
+
+<h2>Project: {{ project }}</h2>
+
+<h3>Upload New License PDFs</h3>
+
+<form id="uploadForm" enctype="multipart/form-data">
+    <input type="file" name="files" accept="application/pdf" multiple required>
+    <button type="submit">Upload</button>
+</form>
+
+<hr>
+<table border="1" cellpadding="8" cellspacing="0">
+    <tr>
+        <th>PDF File</th>
+        <th>Registration Code</th>
+        <th>Actions</th>
+    </tr>
+
+    {% for lic in licenses %}
+    <tr id="row-{{ lic.filename }}">
+        <td>{{ lic.filename }}</td>
+        <td>{{ lic.code }}</td>
+        <td>
+            <button onclick="copyCode('{{ lic.code }}')">Copy</button>
+            <button onclick="deleteFile('{{ lic.filename }}')">Delete</button>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
+<script>
+// Upload PDF
+// Upload multiple PDFs
+document.getElementById("uploadForm").onsubmit = async (e) => {
+    e.preventDefault();
+
+    let formData = new FormData();
+
+    const files = e.target.querySelector('input[type="file"]').files;
+    for (let f of files) {
+        formData.append("files", f);
+    }
+
+    let res = await fetch("/project/{{ project }}/upload", {
+        method: "POST",
+        body: formData
+    });
+
+    let result = await res.json();
+
+    if (res.ok) {
+        alert(
+            "Uploaded: " + result.uploaded.join(", ") +
+            (result.skipped.length > 0 ? "\nSkipped: " + result.skipped.join(", ") : "")
+        );
+        location.reload();
+    } else {
+        alert("Upload failed.");
+    }
+};
+
+function copyCode(code) {
+    navigator.clipboard.writeText(code);
+    alert("Copied: " + code);
+}
+
+function deleteFile(filename) {
+    if (!confirm("Delete " + filename + "?")) return;
+
+    fetch(`/project/{{ project }}/delete/` + filename, { method: "DELETE" })
+        .then(r => {
+            if (r.ok) document.getElementById("row-" + filename).remove();
+            else alert("Delete failed");
+        });
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>License Manager</title>
+</head>
+<body style="font-family:Arial; padding:20px;">
+
+<h2>Enter Project Name</h2>
+
+<form onsubmit="event.preventDefault(); go()">
+    <input type="text" id="project" placeholder="Example: FortiToken" required>
+    <button type="submit">Enter</button>
+</form>
+
+<script>
+function go() {
+    const p = document.getElementById("project").value.trim();
+    window.location.href = "/project/" + p;
+}
+</script>
+
+</body>
+</html>
