@@ -7,6 +7,8 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from dateutil import parser
+from pdf2image import convert_from_path
+import pytesseract
 from PyPDF2 import PdfReader
 
 LICENSE_ROOT = Path("licenses")
@@ -58,16 +60,18 @@ def extract_license_info(pdf: Path) -> dict[str, Optional[str]]:
         text_chunks.append(page_text)
     text = "\n".join(text_chunks)
 
-    code_match = None
     code_patterns = [
         r"Registration Code\s*:\s*([A-Z0-9\-]+)",
         r"Contract Registration Code\s*:\s*([A-Z0-9\-]+)",
         r"Activation Code\s*:?\s*([A-Z0-9\-]+)",
     ]
 
+    code = None
+
     for pattern in code_patterns:
         code_match = re.search(pattern, text, re.IGNORECASE)
         if code_match:
+            code = code_match.group(1).upper()
             break
     expiration_match = re.search(
         r"(Expiration|Expiry|Expires)\s*(Date)?\s*:?\s*([A-Za-z0-9,\-/ ]{6,30})",
@@ -78,11 +82,28 @@ def extract_license_info(pdf: Path) -> dict[str, Optional[str]]:
     raw_expiration = expiration_match.group(3).strip() if expiration_match else None
     expiration = parse_date(raw_expiration) if raw_expiration else None
 
+    keyword = find_keyword(text)
+
+    if keyword == "FTM" and not code:
+        code = extract_ftm_activation_code(pdf)
+
     return {
-        "code": code_match.group(1).upper() if code_match else None,
+        "code": code,
         "expiration": expiration,
-        "keyword": find_keyword(text),
+        "keyword": keyword,
     }
+
+
+def extract_ftm_activation_code(pdf: Path) -> Optional[str]:
+    images = convert_from_path(pdf)
+
+    for image in images:
+        text = pytesseract.image_to_string(image).upper()
+        match = re.search(r"[A-Z0-9]{5}(?:-[A-Z0-9]{5}){4}", text)
+        if match:
+            return match.group(0)
+
+    return None
 
 
 @app.get("/", response_class=HTMLResponse)
