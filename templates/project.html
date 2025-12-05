@@ -23,6 +23,7 @@
             padding: 24px 32px 40px;
         }
         a { color: var(--accent); }
+        .shell { max-width: 1200px; margin: 0 auto; }
         .topbar {
             display: flex;
             flex-wrap: wrap;
@@ -33,7 +34,6 @@
         }
         .title-area { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
         .topbar h1 { margin: 0; }
-        .shell { max-width: 1200px; margin: 0 auto; }
         .panel {
             background: linear-gradient(145deg, #161b22, #0b0f14);
             border: 1px solid var(--border);
@@ -42,7 +42,6 @@
             box-shadow: 0 20px 80px rgba(0, 0, 0, 0.35);
         }
         .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-        .card { background: rgba(22,27,34,0.75); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
         h2 { margin: 0 0 8px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { padding: 9px 10px; text-align: left; }
@@ -81,231 +80,241 @@
     </style>
 </head>
 <body>
-<div class="shell">
-    <div class="topbar">
-        <div class="title-area">
-            <h1>{{ project }}</h1>
-            <p class="subtitle">Upload, extract and share license PDFs from a clean workspace.</p>
-        </div>
-        <div class="mini-upload">
-            <label for="miniFiles">Upload PDFs</label>
-            <input id="miniFiles" type="file" name="files" accept="application/pdf" multiple>
-            <button type="button" class="primary" onclick="submitUpload()">Upload</button>
-        </div>
-    </div>
+<div id="app"></div>
 
-    <div class="grid">
-        <div class="panel">
-            <div class="flex" style="justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
-                <div>
-                    <h2>Licenses</h2>
-                    <p class="subtitle">Registration codes and expiration hints pulled straight from PDFs.</p>
-                </div>
-                <div class="flex" style="gap: 8px;">
-                    <span class="pill">{{ licenses|length }} files</span>
-                    <a class="ghost" href="/">◀ Back to hub</a>
-                    <button class="ghost" onclick="refreshPage()">Refresh</button>
-                </div>
-            </div>
-
-            <div class="controls">
-                <div class="tag">Filters</div>
-                <label class="subtitle" for="typeFilter">License type</label>
-                <select id="typeFilter">
-                    <option value="ALL">All</option>
-                    <option value="FGT">FGT</option>
-                    <option value="FAC">FAC</option>
-                    <option value="FTM">FTM</option>
-                    <option value="FIC">FIC</option>
-                </select>
-                <label class="subtitle" for="perPage">Per page</label>
-                <select id="perPage">
-                    <option value="5">5</option>
-                    <option value="10">10</option>
-                </select>
-                <div class="status" id="status">Waiting for files…</div>
-            </div>
-
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>PDF</th>
-                            <th>Registration Code</th>
-                            <th>Type</th>
-                            <th>Expiration</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="licenseBody">
-                        <tr><td colspan="4" class="muted">No licenses yet. Upload PDFs to get started.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="pagination">
-                <div class="status" id="pageInfo"></div>
-                <div class="flex" style="gap: 8px;">
-                    <button class="ghost" onclick="changePage(-1)">Prev</button>
-                    <button class="ghost" onclick="changePage(1)">Next</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script>
-const project = {{ project|tojson }};
-const allLicenses = {{ licenses|tojson }};
+const projectName = {{ project|tojson }};
+const initialLicenses = {{ licenses|tojson }};
 
-let filteredLicenses = [...allLicenses];
-let currentPage = 1;
-let perPage = 5;
+const e = React.createElement;
 
-const statusEl = document.getElementById("status");
-const licenseBody = document.getElementById("licenseBody");
-const pageInfo = document.getElementById("pageInfo");
-const perPageSelect = document.getElementById("perPage");
-const typeFilter = document.getElementById("typeFilter");
-const miniFiles = document.getElementById("miniFiles");
-
-function refreshPage() {
-    location.reload();
+function Pill({ text, tone = "success" }) {
+    const className = tone === "warning" ? "pill warning" : "pill";
+    return e("span", { className }, text);
 }
 
-function escapeHtml(str) {
-    return String(str ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\"/g, "&quot;")
-        .replace(/'/g, "&#39;");
+function ActionButton({ onClick, label, kind = "ghost", disabled = false }) {
+    const className = kind === "danger" ? "danger" : kind === "primary" ? "primary" : "ghost";
+    return e("button", { className, type: "button", onClick, disabled }, label);
 }
 
-function updateFilters() {
-    const type = typeFilter.value;
-    filteredLicenses = allLicenses.filter((lic) => {
-        if (type === "ALL") return true;
-        const candidate = (lic.keyword || lic.code || "").toUpperCase();
-        return candidate.includes(type);
-    });
+function UploadBox({ onUpload, status }) {
+    const fileRef = React.useRef(null);
+
+    const handleUpload = async () => {
+        if (!fileRef.current || !fileRef.current.files.length) {
+            onUpload(null, "Pick PDF files first.");
+            return;
+        }
+
+        const formData = new FormData();
+        for (const file of fileRef.current.files) {
+            formData.append("files", file);
+        }
+        await onUpload(formData, "Uploading…");
+        if (fileRef.current) fileRef.current.value = "";
+    };
+
+    return e("div", { className: "mini-upload" }, [
+        e("label", { htmlFor: "miniFiles" }, "Upload PDFs"),
+        e("input", { id: "miniFiles", ref: fileRef, type: "file", name: "files", accept: "application/pdf", multiple: true }),
+        e(ActionButton, { onClick: handleUpload, label: status === "Uploading…" ? "Uploading" : "Upload", kind: "primary" }),
+    ]);
 }
 
-function renderTable() {
-    const total = filteredLicenses.length;
-    const totalPages = Math.max(1, Math.ceil(total / perPage));
-    if (currentPage > totalPages) currentPage = totalPages;
+function TableRow({ license, onCopy, onShare, onDelete }) {
+    const typeTone = license.keyword && license.keyword !== "Unknown" ? "success" : "warning";
+    const dateTone = license.expiration && license.expiration !== "Unknown" ? "success" : "warning";
 
-    const start = (currentPage - 1) * perPage;
-    const pageItems = filteredLicenses.slice(start, start + perPage);
-
-    if (pageItems.length === 0) {
-        licenseBody.innerHTML = '<tr><td colspan="4" class="muted">No licenses match this filter.</td></tr>';
-    } else {
-        licenseBody.innerHTML = pageItems
-            .map((lic) => {
-                const safeFile = escapeHtml(lic.filename);
-                const safeCode = escapeHtml(lic.code);
-                const typeCell = lic.keyword !== "Unknown"
-                    ? `<span class="pill">${escapeHtml(lic.keyword)}</span>`
-                    : '<span class="pill warning">Unknown</span>';
-                const dateCell = lic.expiration !== "Unknown"
-                    ? `<span class="pill">${escapeHtml(lic.expiration)}</span>`
-                    : '<span class="pill warning">Unknown</span>';
-
-                return `
-                <tr class="row-compact" id="row-${safeFile}">
-                    <td>${safeFile}</td>
-                    <td>${safeCode}</td>
-                    <td>${typeCell}</td>
-                    <td>${dateCell}</td>
-                    <td>
-                        <div class="actions">
-                            <button onclick="copyText(${JSON.stringify(lic.code || "")}, 'Registration code copied')">Copy code</button>
-                            <button onclick="copyShare(${JSON.stringify(lic.filename)})">Share link</button>
-                            <button class="danger" onclick="deleteFile(${JSON.stringify(lic.filename)})">Delete</button>
-                        </div>
-                    </td>
-                </tr>`;
-            })
-            .join("");
-    }
-
-    const end = start + pageItems.length;
-    pageInfo.textContent = pageItems.length ? `${start + 1}-${end} of ${total}` : `0 of ${total}`;
+    return e("tr", { className: "row-compact", id: `row-${license.filename}` }, [
+        e("td", null, license.filename),
+        e("td", null, license.code || "Not Found"),
+        e("td", null, e(Pill, { text: license.keyword || "Unknown", tone: typeTone })),
+        e("td", null, e(Pill, { text: license.expiration || "Unknown", tone: dateTone })),
+        e("td", null, e("div", { className: "actions" }, [
+            e(ActionButton, { onClick: () => onCopy(license.code || ""), label: "Copy code" }),
+            e(ActionButton, { onClick: () => onShare(license.filename), label: "Share link" }),
+            e(ActionButton, { onClick: () => onDelete(license.filename), label: "Delete", kind: "danger" }),
+        ])),
+    ]);
 }
 
-function changePage(delta) {
-    const totalPages = Math.max(1, Math.ceil(filteredLicenses.length / perPage));
-    currentPage = Math.min(Math.max(1, currentPage + delta), totalPages);
-    renderTable();
-}
+function App({ project, startLicenses }) {
+    const [licenses, setLicenses] = React.useState(startLicenses);
+    const [filter, setFilter] = React.useState("ALL");
+    const [perPage, setPerPage] = React.useState(5);
+    const [page, setPage] = React.useState(1);
+    const [status, setStatus] = React.useState("Waiting for files…");
+    const [uploading, setUploading] = React.useState(false);
 
-async function submitUpload() {
-    if (!miniFiles.files.length) {
-        statusEl.textContent = "Pick PDF files first.";
-        return;
-    }
-
-    statusEl.textContent = "Uploading…";
-    const formData = new FormData();
-    for (const file of miniFiles.files) {
-        formData.append("files", file);
-    }
-
-    const res = await fetch(`/project/${project}/upload`, { method: "POST", body: formData });
-    const result = await res.json();
-
-    if (res.ok) {
-        statusEl.textContent = `Uploaded: ${result.uploaded.length}, Skipped: ${result.skipped.length}`;
-        setTimeout(() => location.reload(), 400);
-    } else {
-        statusEl.textContent = "Upload failed";
-        alert("Upload failed.");
-    }
-}
-
-function copyText(text, message) {
-    navigator.clipboard.writeText(text || "");
-    statusEl.textContent = message;
-}
-
-function copyShare(filename) {
-    const url = `${window.location.origin}/project/${project}/download/${filename}`;
-    navigator.clipboard.writeText(url);
-    statusEl.textContent = "Shareable download link copied";
-}
-
-function deleteFile(filename) {
-    if (!confirm(`Delete ${filename}?`)) return;
-
-    fetch(`/project/${project}/delete/${filename}`, { method: "DELETE" })
-        .then((r) => {
-            if (r.ok) {
-                const index = allLicenses.findIndex((l) => l.filename === filename);
-                if (index >= 0) allLicenses.splice(index, 1);
-                updateFilters();
-                renderTable();
-                statusEl.textContent = `${filename} removed`;
-            } else {
-                alert("Delete failed");
-            }
+    const filtered = React.useMemo(() => {
+        return licenses.filter((lic) => {
+            if (filter === "ALL") return true;
+            const candidate = (lic.keyword || lic.code || "").toUpperCase();
+            return candidate.includes(filter);
         });
+    }, [licenses, filter]);
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+    const currentPage = Math.min(page, totalPages);
+    const start = (currentPage - 1) * perPage;
+    const pageItems = filtered.slice(start, start + perPage);
+
+    const updateStatus = (text) => setStatus(text);
+
+    const copyToClipboard = async (text) => {
+        try {
+            await navigator.clipboard.writeText(text || "");
+            updateStatus("Registration code copied");
+        } catch (err) {
+            updateStatus("Clipboard unavailable");
+            alert("Copy failed. Please copy manually.");
+        }
+    };
+
+    const shareLink = async (filename) => {
+        const url = `${window.location.origin}/project/${encodeURIComponent(project)}/download/${encodeURIComponent(filename)}`;
+        try {
+            await navigator.clipboard.writeText(url);
+            updateStatus("Shareable download link copied");
+        } catch (err) {
+            updateStatus("Clipboard unavailable");
+            alert(url);
+        }
+    };
+
+    const deleteFile = async (filename) => {
+        if (!confirm(`Delete ${filename}?`)) return;
+        const res = await fetch(`/project/${encodeURIComponent(project)}/delete/${encodeURIComponent(filename)}`, { method: "DELETE" });
+        if (res.ok) {
+            setLicenses((prev) => prev.filter((lic) => lic.filename !== filename));
+            updateStatus(`${filename} removed`);
+        } else {
+            updateStatus("Delete failed");
+            alert("Delete failed");
+        }
+    };
+
+    const uploadFiles = async (formData, startMessage) => {
+        if (!formData) {
+            updateStatus(startMessage);
+            return;
+        }
+        setUploading(true);
+        updateStatus(startMessage);
+        try {
+            const res = await fetch(`/project/${encodeURIComponent(project)}/upload`, { method: "POST", body: formData });
+            const result = await res.json().catch(() => ({ uploaded: [], skipped: [] }));
+            if (res.ok) {
+                updateStatus(`Uploaded: ${result.uploaded.length}, Skipped: ${result.skipped.length}`);
+                if (result.uploaded?.length) {
+                    // Reload to pull updated metadata server-side for consistency
+                    window.location.reload();
+                }
+            } else {
+                updateStatus("Upload failed");
+                alert("Upload failed.");
+            }
+        } catch (err) {
+            updateStatus("Upload failed");
+            alert("Upload failed.");
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const pageInfo = pageItems.length ? `${start + 1}-${start + pageItems.length} of ${filtered.length}` : `0 of ${filtered.length}`;
+
+    return e("div", { className: "shell" }, [
+        e("div", { className: "topbar" }, [
+            e("div", { className: "title-area" }, [
+                e("h1", null, project),
+                e("p", { className: "subtitle" }, "Upload, extract and share license PDFs from a clean workspace."),
+            ]),
+            e(UploadBox, { onUpload: uploadFiles, status: uploading ? "Uploading…" : "Upload" }),
+        ]),
+
+        e("div", { className: "grid" }, [
+            e("div", { className: "panel" }, [
+                e("div", { className: "flex", style: { justifyContent: "space-between", alignItems: "flex-start", gap: "10px", flexWrap: "wrap" } }, [
+                    e("div", null, [
+                        e("h2", null, "Licenses"),
+                        e("p", { className: "subtitle" }, "Registration codes and expiration hints pulled straight from PDFs."),
+                    ]),
+                    e("div", { className: "flex", style: { gap: "8px" } }, [
+                        e("span", { className: "pill" }, `${licenses.length} files`),
+                        e("a", { className: "ghost", href: "/" }, "◀ Back to hub"),
+                        e(ActionButton, { label: "Refresh", onClick: () => window.location.reload() }),
+                    ]),
+                ]),
+
+                e("div", { className: "controls" }, [
+                    e("div", { className: "tag" }, "Filters"),
+                    e("label", { className: "subtitle", htmlFor: "typeFilter" }, "License type"),
+                    e("select", {
+                        id: "typeFilter",
+                        value: filter,
+                        onChange: (ev) => { setFilter(ev.target.value); setPage(1); },
+                    }, [
+                        e("option", { value: "ALL" }, "All"),
+                        e("option", { value: "FGT" }, "FGT"),
+                        e("option", { value: "FAC" }, "FAC"),
+                        e("option", { value: "FTM" }, "FTM"),
+                        e("option", { value: "FIC" }, "FIC"),
+                    ]),
+                    e("label", { className: "subtitle", htmlFor: "perPage" }, "Per page"),
+                    e("select", {
+                        id: "perPage",
+                        value: perPage,
+                        onChange: (ev) => { setPerPage(parseInt(ev.target.value, 10) || 5); setPage(1); },
+                    }, [
+                        e("option", { value: 5 }, "5"),
+                        e("option", { value: 10 }, "10"),
+                    ]),
+                    e("div", { className: "status" }, status),
+                ]),
+
+                e("div", { className: "table-container" }, [
+                    e("table", null, [
+                        e("thead", null, e("tr", null, [
+                            e("th", null, "PDF"),
+                            e("th", null, "Registration Code"),
+                            e("th", null, "Type"),
+                            e("th", null, "Expiration"),
+                            e("th", null, "Actions"),
+                        ])),
+                        e("tbody", null,
+                            pageItems.length
+                                ? pageItems.map((lic) => e(TableRow, {
+                                    key: lic.filename,
+                                    license: lic,
+                                    onCopy: copyToClipboard,
+                                    onShare: shareLink,
+                                    onDelete: deleteFile,
+                                }))
+                                : e("tr", null, e("td", { colSpan: 5, className: "muted" }, "No licenses match this filter."))
+                        ),
+                    ]),
+                ]),
+
+                e("div", { className: "pagination" }, [
+                    e("div", { className: "status" }, pageInfo),
+                    e("div", { className: "flex", style: { gap: "8px" } }, [
+                        e(ActionButton, { label: "Prev", onClick: () => setPage(Math.max(1, currentPage - 1)) }),
+                        e(ActionButton, { label: "Next", onClick: () => setPage(Math.min(totalPages, currentPage + 1)) }),
+                    ]),
+                ]),
+            ]),
+        ]),
+    ]);
 }
 
-perPageSelect.addEventListener("change", () => {
-    perPage = parseInt(perPageSelect.value, 10) || 5;
-    currentPage = 1;
-    renderTable();
-});
-
-typeFilter.addEventListener("change", () => {
-    currentPage = 1;
-    updateFilters();
-    renderTable();
-});
-
-updateFilters();
-renderTable();
+const appRoot = document.getElementById("app");
+if (appRoot) {
+    ReactDOM.createRoot(appRoot).render(e(App, { project: projectName, startLicenses: initialLicenses }));
+}
 </script>
 </body>
 </html>
